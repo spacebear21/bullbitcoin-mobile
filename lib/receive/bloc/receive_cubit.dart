@@ -70,7 +70,7 @@ class ReceiveCubit extends Cubit<ReceiveState> {
     loadAddress();
     if (state.paymentNetwork == PaymentNetwork.bitcoin &&
         !state.disablePayjoin) {
-      loadPayjoinReceiver();
+      loadPayjoinReceiver(state.walletBloc!.state.wallet!.isTestnet());
     }
   }
 
@@ -379,7 +379,7 @@ class ReceiveCubit extends Cubit<ReceiveState> {
 
   void shareClicked() {}
 
-  void loadPayjoinReceiver() async {
+  void loadPayjoinReceiver(bool isTestnet) async {
     final ohttpRelay = await Url.fromStr('https://ohttp.achow101.com');
     final payjoinDirectory = await Url.fromStr('https://payjo.in');
     final ohttpKeys = await fetchOhttpKeys(
