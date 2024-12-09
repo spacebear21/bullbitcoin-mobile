@@ -51,4 +51,25 @@ class PayjoinSessionStorage {
       return Err(e.toString());
     }
   }
+
+  Future<(Receiver?, Err?)> readReceiverSession(
+    String sessionId,
+  ) async {
+    try {
+      final (jsn, err) = await _hiveStorage.getValue(sessionId);
+      if (err != null) throw err;
+      final obj = jsonDecode(jsn!) as String;
+      print(obj);
+      final session = Receiver.fromJson(obj);
+      return (session, null);
+    } catch (e) {
+      return (
+        null,
+        Err(
+          e.toString(),
+          expected: e.toString() == 'No Receiver with id $sessionId',
+        )
+      );
+    }
+  }
 }
