@@ -63,7 +63,7 @@ class ReceiveCubit extends Cubit<ReceiveState> {
     loadAddress();
     if (state.paymentNetwork == PaymentNetwork.bitcoin &&
         !state.disablePayjoin) {
-      loadPayjoinReceiver();
+      loadPayjoinReceiver(state.walletBloc!.state.wallet!.isTestnet());
     }
   }
 
@@ -372,7 +372,7 @@ class ReceiveCubit extends Cubit<ReceiveState> {
 
   void shareClicked() {}
 
-  void loadPayjoinReceiver() async {
+  void loadPayjoinReceiver(bool isTestnet) async {
     final ohttpRelay = await Url.fromStr('https://ohttp.achow101.com');
     final payjoinDirectory = await Url.fromStr('https://payjo.in');
     final ohttpKeys = await fetchOhttpKeys(
@@ -380,14 +380,20 @@ class ReceiveCubit extends Cubit<ReceiveState> {
       payjoinDirectory: payjoinDirectory,
     );
     final address = state.defaultAddress!.address;
-    final receiver = await Receiver.create(
-      address: address,
-      network: Network.bitcoin,
-      directory: payjoinDirectory,
-      ohttpKeys: ohttpKeys,
-      ohttpRelay: ohttpRelay,
-    );
-    await _payjoinSessionStorage.insertReceiverSession(receiver);
-    emit(state.copyWith(payjoinReceiver: receiver));
+    try {
+      final receiver = await Receiver.create(
+        address: address,
+        network: isTestnet ? Network.testnet : Network.bitcoin,
+        directory: payjoinDirectory,
+        ohttpKeys: ohttpKeys,
+        ohttpRelay: ohttpRelay,
+      );
+      await _payjoinSessionStorage.insertReceiverSession(receiver);
+      emit(state.copyWith(payjoinReceiver: receiver));
+    } catch (e) {
+      print('error: $e');
+      // TODO propagate error
+      emit(state.copyWith(payjoinReceiver: null));
+    }
   }
 }
