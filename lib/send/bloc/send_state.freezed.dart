@@ -39,7 +39,7 @@ mixin _$SendState {
   String get errDownloadingFile => throw _privateConstructorUsedError;
   bool get downloaded => throw _privateConstructorUsedError;
   bool get disableRBF => throw _privateConstructorUsedError;
-  Uri? get payjoinEndpoint => throw _privateConstructorUsedError;
+  pj_uri.PjUri? get payjoinUri => throw _privateConstructorUsedError;
   bool get sendAllCoin => throw _privateConstructorUsedError;
   List<UTXO> get selectedUtxos => throw _privateConstructorUsedError;
   String get errAddresses => throw _privateConstructorUsedError;
@@ -84,7 +84,7 @@ abstract class $SendStateCopyWith<$Res> {
       String errDownloadingFile,
       bool downloaded,
       bool disableRBF,
-      Uri? payjoinEndpoint,
+      pj_uri.PjUri? payjoinUri,
       bool sendAllCoin,
       List<UTXO> selectedUtxos,
       String errAddresses,
@@ -135,7 +135,7 @@ class _$SendStateCopyWithImpl<$Res, $Val extends SendState>
     Object? errDownloadingFile = null,
     Object? downloaded = null,
     Object? disableRBF = null,
-    Object? payjoinEndpoint = freezed,
+    Object? payjoinUri = freezed,
     Object? sendAllCoin = null,
     Object? selectedUtxos = null,
     Object? errAddresses = null,
@@ -228,10 +228,10 @@ class _$SendStateCopyWithImpl<$Res, $Val extends SendState>
           ? _value.disableRBF
           : disableRBF // ignore: cast_nullable_to_non_nullable
               as bool,
-      payjoinEndpoint: freezed == payjoinEndpoint
-          ? _value.payjoinEndpoint
-          : payjoinEndpoint // ignore: cast_nullable_to_non_nullable
-              as Uri?,
+      payjoinUri: freezed == payjoinUri
+          ? _value.payjoinUri
+          : payjoinUri // ignore: cast_nullable_to_non_nullable
+              as pj_uri.PjUri?,
       sendAllCoin: null == sendAllCoin
           ? _value.sendAllCoin
           : sendAllCoin // ignore: cast_nullable_to_non_nullable
@@ -333,7 +333,7 @@ abstract class _$$SendStateImplCopyWith<$Res>
       String errDownloadingFile,
       bool downloaded,
       bool disableRBF,
-      Uri? payjoinEndpoint,
+      pj_uri.PjUri? payjoinUri,
       bool sendAllCoin,
       List<UTXO> selectedUtxos,
       String errAddresses,
@@ -384,7 +384,7 @@ class __$$SendStateImplCopyWithImpl<$Res>
     Object? errDownloadingFile = null,
     Object? downloaded = null,
     Object? disableRBF = null,
-    Object? payjoinEndpoint = freezed,
+    Object? payjoinUri = freezed,
     Object? sendAllCoin = null,
     Object? selectedUtxos = null,
     Object? errAddresses = null,
@@ -477,10 +477,10 @@ class __$$SendStateImplCopyWithImpl<$Res>
           ? _value.disableRBF
           : disableRBF // ignore: cast_nullable_to_non_nullable
               as bool,
-      payjoinEndpoint: freezed == payjoinEndpoint
-          ? _value.payjoinEndpoint
-          : payjoinEndpoint // ignore: cast_nullable_to_non_nullable
-              as Uri?,
+      payjoinUri: freezed == payjoinUri
+          ? _value.payjoinUri
+          : payjoinUri // ignore: cast_nullable_to_non_nullable
+              as pj_uri.PjUri?,
       sendAllCoin: null == sendAllCoin
           ? _value.sendAllCoin
           : sendAllCoin // ignore: cast_nullable_to_non_nullable
@@ -549,7 +549,7 @@ class _$SendStateImpl extends _SendState {
       this.errDownloadingFile = '',
       this.downloaded = false,
       this.disableRBF = false,
-      this.payjoinEndpoint,
+      this.payjoinUri,
       this.sendAllCoin = false,
       final List<UTXO> selectedUtxos = const [],
       this.errAddresses = '',
@@ -629,7 +629,7 @@ class _$SendStateImpl extends _SendState {
   @JsonKey()
   final bool disableRBF;
   @override
-  final Uri? payjoinEndpoint;
+  final pj_uri.PjUri? payjoinUri;
   @override
   @JsonKey()
   final bool sendAllCoin;
@@ -666,7 +666,7 @@ class _$SendStateImpl extends _SendState {
 
   @override
   String toString() {
-    return 'SendState(address: $address, enabledWallets: $enabledWallets, paymentNetwork: $paymentNetwork, selectedWalletBloc: $selectedWalletBloc, invoice: $invoice, showSendButton: $showSendButton, buildingOnChain: $buildingOnChain, note: $note, tempAmt: $tempAmt, scanningAddress: $scanningAddress, errScanningAddress: $errScanningAddress, sending: $sending, errSending: $errSending, sent: $sent, psbt: $psbt, tx: $tx, downloadingFile: $downloadingFile, errDownloadingFile: $errDownloadingFile, downloaded: $downloaded, disableRBF: $disableRBF, payjoinEndpoint: $payjoinEndpoint, sendAllCoin: $sendAllCoin, selectedUtxos: $selectedUtxos, errAddresses: $errAddresses, signed: $signed, psbtSigned: $psbtSigned, psbtSignedFeeAmount: $psbtSignedFeeAmount, onChainAbsFee: $onChainAbsFee, onChainSweep: $onChainSweep, oneWallet: $oneWallet, drainUtxos: $drainUtxos)';
+    return 'SendState(address: $address, enabledWallets: $enabledWallets, paymentNetwork: $paymentNetwork, selectedWalletBloc: $selectedWalletBloc, invoice: $invoice, showSendButton: $showSendButton, buildingOnChain: $buildingOnChain, note: $note, tempAmt: $tempAmt, scanningAddress: $scanningAddress, errScanningAddress: $errScanningAddress, sending: $sending, errSending: $errSending, sent: $sent, psbt: $psbt, tx: $tx, downloadingFile: $downloadingFile, errDownloadingFile: $errDownloadingFile, downloaded: $downloaded, disableRBF: $disableRBF, payjoinUri: $payjoinUri, sendAllCoin: $sendAllCoin, selectedUtxos: $selectedUtxos, errAddresses: $errAddresses, signed: $signed, psbtSigned: $psbtSigned, psbtSignedFeeAmount: $psbtSignedFeeAmount, onChainAbsFee: $onChainAbsFee, onChainSweep: $onChainSweep, oneWallet: $oneWallet, drainUtxos: $drainUtxos)';
   }
 
   @override
@@ -706,8 +706,8 @@ class _$SendStateImpl extends _SendState {
                 other.downloaded == downloaded) &&
             (identical(other.disableRBF, disableRBF) ||
                 other.disableRBF == disableRBF) &&
-            (identical(other.payjoinEndpoint, payjoinEndpoint) ||
-                other.payjoinEndpoint == payjoinEndpoint) &&
+            (identical(other.payjoinUri, payjoinUri) ||
+                other.payjoinUri == payjoinUri) &&
             (identical(other.sendAllCoin, sendAllCoin) ||
                 other.sendAllCoin == sendAllCoin) &&
             const DeepCollectionEquality()
@@ -752,7 +752,7 @@ class _$SendStateImpl extends _SendState {
         errDownloadingFile,
         downloaded,
         disableRBF,
-        payjoinEndpoint,
+        payjoinUri,
         sendAllCoin,
         const DeepCollectionEquality().hash(_selectedUtxos),
         errAddresses,
@@ -796,7 +796,7 @@ abstract class _SendState extends SendState {
       final String errDownloadingFile,
       final bool downloaded,
       final bool disableRBF,
-      final Uri? payjoinEndpoint,
+      final pj_uri.PjUri? payjoinUri,
       final bool sendAllCoin,
       final List<UTXO> selectedUtxos,
       final String errAddresses,
@@ -851,7 +851,7 @@ abstract class _SendState extends SendState {
   @override
   bool get disableRBF;
   @override
-  Uri? get payjoinEndpoint;
+  pj_uri.PjUri? get payjoinUri;
   @override
   bool get sendAllCoin;
   @override
