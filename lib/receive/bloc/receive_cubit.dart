@@ -397,7 +397,7 @@ class ReceiveCubit extends Cubit<ReceiveState> {
     await _payjoinSessionStorage.insertReceiverSession(receiver);
     emit(state.copyWith(payjoinReceiver: receiver));
     try {
-      _payjoinSync.syncPayjoin(
+      _payjoinSync.spawnReceiver(
         receiver: receiver,
       );
     } catch (e) {
