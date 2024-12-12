@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:isolate';
 
 import 'package:bb_mobile/_model/address.dart';
 import 'package:bb_mobile/_model/network.dart';
@@ -8,6 +9,7 @@ import 'package:bb_mobile/_pkg/barcode.dart';
 import 'package:bb_mobile/_pkg/boltz/swap.dart';
 import 'package:bb_mobile/_pkg/consts/configs.dart';
 import 'package:bb_mobile/_pkg/file_storage.dart';
+import 'package:bb_mobile/_pkg/payjoin/session_storage.dart';
 import 'package:bb_mobile/_pkg/wallet/bip21.dart';
 import 'package:bb_mobile/_pkg/wallet/transaction.dart';
 import 'package:bb_mobile/currency/bloc/currency_cubit.dart';
@@ -21,6 +23,10 @@ import 'package:bb_mobile/wallet/bloc/wallet_bloc.dart';
 import 'package:boltz_dart/boltz_dart.dart' as boltz;
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:http/http.dart' as http;
+import 'package:payjoin_flutter/common.dart' as pj;
+import 'package:payjoin_flutter/send.dart';
+import 'package:payjoin_flutter/uri.dart' as pj_uri;
 
 class SendCubit extends Cubit<SendState> {
   SendCubit({
@@ -28,6 +34,7 @@ class SendCubit extends Cubit<SendState> {
     WalletBloc? walletBloc,
     required WalletTx walletTx,
     required FileStorage fileStorage,
+    required PayjoinSessionStorage payjoinSessionStorage,
     required NetworkCubit networkCubit,
     required NetworkFeesCubit networkFeesCubit,
     required CurrencyCubit currencyCubit,
@@ -43,6 +50,7 @@ class SendCubit extends Cubit<SendState> {
         _currencyCubit = currencyCubit,
         _walletTx = walletTx,
         _fileStorage = fileStorage,
+        _payjoinSessionStorage = payjoinSessionStorage,
         _barcode = barcode,
         _swapBoltz = swapBoltz,
         _swapCubit = swapCubit,
@@ -65,6 +73,7 @@ class SendCubit extends Cubit<SendState> {
 
   final Barcode _barcode;
   final FileStorage _fileStorage;
+  final PayjoinSessionStorage _payjoinSessionStorage;
   final WalletTx _walletTx;
   final SwapBoltz _swapBoltz;
 
@@ -135,7 +144,13 @@ class SendCubit extends Cubit<SendState> {
         }
         final pjParam = bip21Obj.options['pj'] as String?;
         if (pjParam != null) {
-          emit(state.copyWith(payjoinEndpoint: Uri.parse(pjParam)));
+          try {
+            final uri = await pj_uri.Uri.fromStr(bip21Obj.toString());
+            final pjUri = uri.checkPjSupported();
+            emit(state.copyWith(payjoinUri: pjUri));
+          } catch (e) {
+            print('error: $e');
+          }
         }
       case AddressNetwork.bip21Liquid:
         final bip21Obj = bip21.decode(
@@ -881,12 +896,12 @@ class SendCubit extends Cubit<SendState> {
     }
 
     final (wallet, tx, feeAmt) = buildResp!;
-
+    print('tx.psbt psbtSigned: ${tx!.psbt}');
     if (!wallet!.watchOnly()) {
       emit(
         state.copyWith(
           sending: false,
-          psbtSigned: tx!.psbt,
+          psbtSigned: tx.psbt,
           psbtSignedFeeAmount: feeAmt,
           tx: tx,
           signed: true,
@@ -910,7 +925,7 @@ class SendCubit extends Cubit<SendState> {
       emit(
         state.copyWith(
           sending: false,
-          psbt: tx!.psbt!,
+          psbt: tx.psbt!,
           tx: tx,
         ),
       );
@@ -1051,6 +1066,7 @@ class SendCubit extends Cubit<SendState> {
   }
 
   void processSendButton(String label) async {
+    print('processSendButton');
     final network =
         _networkCubit.state.testnet ? BBNetwork.Testnet : BBNetwork.Mainnet;
     final (_, addressError) =
@@ -1122,7 +1138,17 @@ class SendCubit extends Cubit<SendState> {
       if (!isLn) {
         final fees = _networkFeesCubit.state.selectedOrFirst(false);
         baseLayerBuild(networkFees: fees);
-        return;
+        // wait until psbtSigned is not null FIXME!
+        while (state.psbtSigned == null) {
+          await Future.delayed(100.ms);
+        }
+        if (state.payjoinUri != null) {
+          sendPayjoin(
+            networkFees: fees,
+            originalPsbt: state.psbtSigned!,
+            wallet: wallet,
+          );
+        }
       }
       // context.read<WalletBloc>().state.wallet;
       final isLiq = wallet.isLiquid();
@@ -1147,6 +1173,130 @@ class SendCubit extends Cubit<SendState> {
       return;
     }
     sendSwap();
+  }
+
+  void sendPayjoin({
+    required int networkFees,
+    required String originalPsbt,
+    required Wallet wallet,
+  }) async {
+    var (sender, err) = await _payjoinSessionStorage.readSenderSession(
+      state.payjoinUri!.pjEndpoint(),
+    );
+    if (err != null) {
+      throw Exception('Error reading sender session: $err');
+    }
+    sender ??= await initPayjoinSender(
+      networkFees: networkFees,
+      originalPsbt: originalPsbt,
+      pjUri: state.payjoinUri!,
+    );
+    await _payjoinSessionStorage.insertSenderSession(
+      sender,
+      state.payjoinUri!.pjEndpoint(),
+    );
+    await spawnPayjoinSender(
+      sender: sender,
+    );
+  }
+
+  Future<Sender> initPayjoinSender({
+    required int networkFees,
+    required String originalPsbt,
+    required pj_uri.PjUri pjUri,
+  }) async {
+    try {
+      print('initPayjoinSender');
+      final minFeeRateSatPerKwu = BigInt.from(networkFees * 250);
+      print('minFeeRateSatPerKwu: $minFeeRateSatPerKwu');
+      print('originalPsbt: $originalPsbt');
+      final senderBuilder = await SenderBuilder.fromPsbtAndUri(
+        psbtBase64: originalPsbt,
+        pjUri: pjUri,
+      );
+      print('senderBuilder: $senderBuilder');
+      final sender = await senderBuilder.buildRecommended(
+        minFeeRate: minFeeRateSatPerKwu,
+      );
+      print('sender: $sender');
+      return sender;
+    } catch (e) {
+      print('Error in initPayjoinSender: $e');
+      throw Exception('Error in initPayjoinSender: $e');
+    }
+  }
+
+  Future<void> spawnPayjoinSender({
+    required Sender sender,
+  }) async {
+    Isolate.spawn(pollSender, sender);
+  }
+
+  Future<String?> pollSender(Sender sender) async {
+    final ohttpProxyUrl =
+        await pj_uri.Url.fromStr('https://ohttp.achow101.com');
+    pj.Request postReq;
+    V2PostContext postReqCtx;
+    try {
+      final result = await sender.extractV2(ohttpProxyUrl: ohttpProxyUrl);
+      postReq = result.$1;
+      postReqCtx = result.$2;
+    } catch (e) {
+      try {
+        final (req, v1Ctx) = await sender.extractV1();
+        print('Posting Original PSBT Payload request...');
+        final response = await http.post(
+          Uri.parse(req.url.asString()),
+          headers: {
+            'Content-Type': req.contentType,
+          },
+          body: req.body,
+        );
+        print('Sent fallback transaction');
+        final proposalPsbt =
+            await v1Ctx.processResponse(response: response.bodyBytes);
+        return proposalPsbt;
+      } catch (e) {
+        print(e);
+        throw Exception('Response error: $e');
+      }
+    }
+    final postRes = await http.post(
+      Uri.parse(postReq.url.asString()),
+      headers: {
+        'Content-Type': postReq.contentType,
+      },
+      body: postReq.body,
+    );
+    final getCtx = await postReqCtx.processResponse(
+      response: postRes.bodyBytes,
+    );
+    String? proposalPsbt;
+    while (true) {
+      final (getRequest, getReqCtx) = await getCtx.extractReq(
+        ohttpRelay: ohttpProxyUrl,
+      );
+      final getRes = await http.post(
+        Uri.parse(getRequest.url.asString()),
+        headers: {
+          'Content-Type': getRequest.contentType,
+        },
+        body: getRequest.body,
+      );
+      proposalPsbt = await getCtx.processResponse(
+        response: getRes.bodyBytes,
+        ohttpCtx: getReqCtx,
+      ); // TODO throw error if null
+      break;
+    }
+    return proposalPsbt;
+  }
+
+  // process, finalize, and broadcast
+  void processPayjoinProposal(String proposalPsbt, Wallet wallet) async {
+    final payjoin =
+        await _walletTx.signPsbt(psbt: proposalPsbt, wallet: wallet);
+    // baseLayerSend() but not in UI
   }
 
   void buildChainSwap(
